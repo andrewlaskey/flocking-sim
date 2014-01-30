@@ -10,7 +10,7 @@ var calcMagnitude = function(x, y) {
 }
 
 var calcVectorAdd = function(v1, v2) {
-    return {x: v1.x + v2.x, y: v1.y + v1.y};
+    return {x: v1.x + v2.x, y: v1.y + v2.y};
 }
 
 /***********************
@@ -21,20 +21,22 @@ function Boid(x, y, predator) {
 }
 
 function isPredator(boid) {
-    var predatorBoid = boid;
-    predatorBoid.predator = true;
-    predatorBoid.color = 'rgb(230,25,29)';
-    return predatorBoid;
+    boid.predator = true;
+    boid.color = 'rgb(230,25,29)';
+    boid.speed = 5.5;
+    boid.eyesight = 150;
+    return boid;
 }
 
 Boid.prototype = {
     init: function(x, y, predator) {
         this.alive = true;
+        this.health = 1;
 
         this.predator = predator || false;
 
         this.radius = 5;
-        this.color = 'rgb(' + ~~random(0,255) + ',' + ~~random(0,255) + ',' + ~~random(0,255) + ')';
+        this.color = 'rgb(' + ~~random(0,50) + ',' + ~~random(50,200) + ',' + ~~random(50,200) + ')';
 
         this.x = x || 0.0;
         this.y = y || 0.0;
@@ -44,13 +46,12 @@ Boid.prototype = {
             y: random(-1, 1)
         }
 
-        this.speed = 1;
-        this.speedLimit = 6;
-        this.eyesight = 60; //range for object dectection
+        this.speed = 6;
+        this.eyesight = 100; //range for object dectection
         this.personalSpace = 12; //distance to avoid safe objects
         this.flightDistance = 60; //distance to avoid scary objects
         this.flockDistance = 200; //factor that determines how attracted the boid is to the center of the flock
-        this.matchVelFactor = 6; //factor that determines how much the flock velocity affects the boid
+        this.matchVelFactor = 4; //factor that determines how much the flock velocity affects the boid
         
     },
     wallAvoid: function(ctx) {
@@ -69,49 +70,54 @@ Boid.prototype = {
     ai: function(boids, index, ctx) {
         percievedCenter = {
             x: 0,
-            y: 0
+            y: 0,
+            count: 0
         };
         repellCenter = {
             x: 0,
-            y: 0
+            y: 0,
+            count: 0
         };
         percievedVelocity = {
             x: 0,
-            y: 0
+            y: 0,
+            count: 0
         };
         mousePredator = {
-            x: 0,
-            y: 0
+            x: ctx.touches[0].x || 0,
+            y: ctx.touches[0].y || 0
         };
         fleeOrHuntVector = {
             x: 0,
-            y: 0
+            y: 0,
+            count: 0
         };
-        count = 0;
+
         for (var i = 0; i < boids.length; i++) {
             if (i != index) {
 
-                //Allignment
                 dist = calculateDistance(this, boids[i]);
 
                 //Find all other boids close to it
-                if (dist > 0 && dist < this.eyesight) {
+                if (dist < this.eyesight) {
                     //if the same species then flock
                     if (boids[i].predator == this.predator) {
-                        count++;
 
                         //Alignment
                         percievedCenter.x += boids[i].x;
                         percievedCenter.y += boids[i].y;
+                        percievedCenter.count++;
 
                         //Cohesion
                         percievedVelocity.x += boids[i].v.x;
                         percievedVelocity.y += boids[i].v.y;
+                        percievedVelocity.count++;
 
                         //Seperation
-                        if (calculateDistance(boids[i], this) < this.personalSpace) {
+                        if (calculateDistance(boids[i], this) < this.personalSpace + this.radius) {
                             repellCenter.x -= (boids[i].x - this.x);
                             repellCenter.y -= (boids[i].y - this.y);
+                            repellCenter.count++;
                         }
                     } else {
                         //avoid or hunt
@@ -122,6 +128,7 @@ Boid.prototype = {
                             fleeOrHuntVector.x -= boids[i].x - this.x;
                             fleeOrHuntVector.y -= boids[i].y - this.y;
                         }
+                        fleeOrHuntVector.count++;
 
                     }
 
@@ -129,36 +136,42 @@ Boid.prototype = {
             }
         }
         //Get the average for all near boids
-        if (count > 0) {
-            percievedCenter.x = ((percievedCenter.x / count) - this.x) / this.flockDistance;
-            percievedCenter.y = ((percievedCenter.y / count) - this.y) / this.flockDistance;
-
-            percievedVelocity.x = ((percievedVelocity.x / count) - this.v.x) / this.matchVelFactor;
-            percievedVelocity.y = ((percievedVelocity.y / count) - this.v.y) / this.matchVelFactor;
+        if (percievedCenter.count > 0) {
+            percievedCenter.x = ((percievedCenter.x / percievedCenter.count) - this.x) / this.flockDistance;
+            percievedCenter.y = ((percievedCenter.y / percievedCenter.count) - this.y) / this.flockDistance;
+            this.v = calcVectorAdd(this.v, percievedCenter);
         }
-        this.addForce(percievedCenter);
-        this.addForce(percievedVelocity);
-        this.addForce(repellCenter);
-        this.addForce(fleeOrHuntVector);
+        if (percievedVelocity.count > 0) {
+            percievedVelocity.x = ((percievedVelocity.x / percievedVelocity.count) - this.v.x) / this.matchVelFactor;
+            percievedVelocity.y = ((percievedVelocity.y / percievedVelocity.count) - this.v.y) / this.matchVelFactor;
+            this.v = calcVectorAdd(this.v, percievedVelocity);
+        }
+        if (repellCenter.count > 0) {
+            this.v = calcVectorAdd(this.v, repellCenter);
+        }
+        if (fleeOrHuntVector.count > 0) {
+            this.v = calcVectorAdd(this.v, fleeOrHuntVector);
+        }
+
+        //avoid mouse
+        if (calculateDistance(mousePredator, this) < this.eyesight) {
+            var mouseModifier = 20;
+            mousePredator.x -= (mousePredator.x - this.x) * mouseModifier;
+            mousePredator.y -= (mousePredator.y - this.y) * mouseModifier;
+            this.v = calcVectorAdd(this.v, mousePredator);
+        }
         this.wallAvoid(ctx);
-        this.limitVelocity();
+        this.setUnitVector();
     },
-    addForce: function(force) {
-        this.v.x += force.x;
-        this.v.y += force.y;
-    },
-    limitVelocity: function() {
+    setUnitVector: function() {
         var magnitude = calcMagnitude(this.v.x, this.v.y);
-
-        if (magnitude> this.speedLimit) {
-            this.v.x = (this.v.x / magnitude) * this.speedLimit;
-            this.v.y = (this.v.y / magnitude) * this.speedLimit;
-        }
+        this.v.x = this.v.x / magnitude;
+        this.v.y = this.v.y / magnitude;
     },
     draw: function( ctx ) {
 
         ctx.beginPath();
-        ctx.arc( this.x, this.y, this.radius, 0, TWO_PI );
+        ctx.arc( this.x, this.y, this.radius + this.health, 0, TWO_PI );
         ctx.fillStyle = this.color;
         ctx.fill();
     }
@@ -199,12 +212,33 @@ sim.spawn = function( x, y, predator ) {
     };
 
 sim.update = function() {
-
+        
         for ( var i = boids.length - 1; i >= 0; i-- ) {
-            boids[i].ai(boids, i, sim);
-            boids[i].x += boids[i].v.x * boids[i].speed;
-            boids[i].y += boids[i].v.y * boids[i].speed;
-        }  
+            if (boids[i].alive) {
+                boids[i].ai(boids, i, sim);
+                boids[i].x += boids[i].v.x * boids[i].speed;
+                boids[i].y += boids[i].v.y * boids[i].speed;
+
+                //collision and eating check
+                if (boids[i].predator) {
+                    for ( var k = boids.length - 1; k >= 0; k-- ) {
+                        if (i !== k && !boids[k].predator) {
+                            
+                            dist = calculateDistance(boids[i], boids[k]);
+
+                            if (dist < boids[i].radius + boids[k].radius) {
+                                //kill boid k
+                                boids[k].alive = false;
+                                boids[i].health++;
+                            }
+                        }
+                    }
+                }//end predator eating check
+            } else {
+                //remove dead boid
+                boids.splice(i,1);
+            }
+        }
 }
 
 sim.draw = function() {
