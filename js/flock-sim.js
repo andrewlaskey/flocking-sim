@@ -1,12 +1,12 @@
 var calculateDistance = function(object1, object2){
-        x = Math.abs(object1.x - object2.x);
-        y = Math.abs(object1.y - object2.y);
+        x = abs(object1.x - object2.x);
+        y = abs(object1.y - object2.y);
         
-        return Math.sqrt((x * x) + (y * y));
+        return sqrt((x * x) + (y * y));
     }
 
 var calcMagnitude = function(x, y) {
-    return Math.sqrt((x * x) + (y * y));
+    return sqrt((x * x) + (y * y));
 }
 
 var calcVectorAdd = function(v1, v2) {
@@ -22,7 +22,7 @@ function Boid(x, y, predator) {
 
 function isPredator(boid) {
     boid.predator = true;
-    boid.color = 'rgb(230,25,29)';
+    boid.color = 'rgb(' + ~~random(100,250) + ',' + ~~random(10,30) + ',' + ~~random(10,30) + ')';
     boid.speed = 5.5;
     boid.eyesight = 150;
     return boid;
@@ -36,7 +36,7 @@ Boid.prototype = {
         this.predator = predator || false;
 
         this.radius = 5;
-        this.color = 'rgb(' + ~~random(0,50) + ',' + ~~random(50,200) + ',' + ~~random(50,200) + ')';
+        this.color = 'rgb(' + ~~random(0,100) + ',' + ~~random(50,220) + ',' + ~~random(50,220) + ')';
 
         this.x = x || 0.0;
         this.y = y || 0.0;
@@ -55,17 +55,46 @@ Boid.prototype = {
         
     },
     wallAvoid: function(ctx) {
-        var boundAdjust = 20;
-        if (this.x > ctx.width - boundAdjust) {
-            this.v.x = -this.speedLimit;
-        } else if (this.x < boundAdjust) {
-            this.v.x = this.speedLimit;
+        wallModifier = 30;
+        //each side of the screen becomes an object that to be avoided factored into the birds movement
+        wallLeft = {
+            x: 0,
+            y: this.y
+        };
+        wallTop = {
+            x: this.x,
+            y: 0
+        };
+        wallRight = {
+            x: ctx.width,
+            y: this.y
+        };
+        wallBottom = {
+            x: this.x,
+            y: ctx.height
+        };
+        wallAvoid = {
+            x: 0,
+            y: 0
+        };
+        
+        if (calculateDistance(wallLeft, this) < this.personalSpace + this.radius) {
+                        wallAvoid.x -= (wallLeft.x - this.x) * wallModifier;
+                        wallAvoid.y -= (wallLeft.y - this.y) * wallModifier;
         }
-        if (this.y > ctx.height - boundAdjust) {
-            this.v.y = -this.speedLimit;
-        } else if (this.y < boundAdjust) {
-            this.v.y = this.speedLimit;
+        if (calculateDistance(wallTop, this) < this.personalSpace + this.radius) {
+                        wallAvoid.x -= (wallTop.x - this.x) * wallModifier;
+                        wallAvoid.y -= (wallTop.y - this.y) * wallModifier;
         }
+        if (calculateDistance(wallRight, this) < this.personalSpace + this.radius) {
+                        wallAvoid.x -= (wallRight.x - this.x) * wallModifier;
+                        wallAvoid.y -= (wallRight.y - this.y) * wallModifier;
+        }
+        if (calculateDistance(wallBottom, this) < this.personalSpace + this.radius) {
+                        wallAvoid.x -= (wallBottom.x - this.x) * wallModifier;
+                        wallAvoid.y -= (wallBottom.y - this.y) * wallModifier;
+        }
+        this.v = calcVectorAdd(this.v, wallAvoid);
     },
     ai: function(boids, index, ctx) {
         percievedCenter = {
@@ -84,8 +113,8 @@ Boid.prototype = {
             count: 0
         };
         mousePredator = {
-            x: ctx.touches[0].x || 0,
-            y: ctx.touches[0].y || 0
+            x: ((typeof ctx.touches[0] === "undefined") ? 0 : ctx.touches[0].x),
+            y: ((typeof ctx.touches[0] === "undefined") ? 0 : ctx.touches[0].y)
         };
         fleeOrHuntVector = {
             x: 0,
@@ -170,9 +199,18 @@ Boid.prototype = {
     },
     draw: function( ctx ) {
 
+        drawSize = this.radius + this.health;
+
         ctx.beginPath();
-        ctx.arc( this.x, this.y, this.radius + this.health, 0, TWO_PI );
+        ctx.moveTo( this.x + ( this.v.x * drawSize ), this.y + ( this.v.y * drawSize ));
+        ctx.lineTo( this.x + ( this.v.y * drawSize ), this.y - ( this.v.x * drawSize ));
+        ctx.lineTo( this.x - ( this.v.x * drawSize * 2 ), this.y - ( this.v.y * drawSize * 2 ));
+        ctx.lineTo( this.x - ( this.v.y * drawSize ), this.y + ( this.v.x * drawSize ));
+        ctx.lineTo( this.x + ( this.v.x * drawSize ), this.y + ( this.v.y * drawSize ));
+        //ctx.arc( this.x, this.y, this.radius + this.health, 0, TWO_PI );
         ctx.fillStyle = this.color;
+        ctx.shadowBlur = 20;
+        ctx.shadowColor = this.color;
         ctx.fill();
     }
 };
