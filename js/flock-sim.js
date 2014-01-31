@@ -34,7 +34,7 @@ Boid.prototype = {
         this.maturity = 3;
         this.speed = 6;
         this.size = 5;
-        this.hungerLimit = 20000;
+        this.hungerLimit = 12000;
         this.hunger = 0;
         this.color = 'rgb(' + ~~random(0,100) + ',' + ~~random(50,220) + ',' + ~~random(50,220) + ')';
 
@@ -56,8 +56,12 @@ Boid.prototype = {
 
         this.unitV = {
             x: 0,
-            y: 0
+            y: 0,
         };
+
+        this.v.mag = calcMagnitude(this.v.x, this.v.y);
+        this.unitV.x = (this.v.x / this.v.mag);
+        this.unitV.y = (this.v.y / this.v.mag);
 
     },
     wallAvoid: function(ctx) {
@@ -115,7 +119,7 @@ Boid.prototype = {
                         }
                     } else {
                         //if other species fight or flight
-                        if (dist < this.size + boids[i].size) {
+                        if (dist < this.size + this.health + boids[i].size + boids[i].health) {
                             this.eat(boids[i]);
                         } else {
                             this.handleOther(boids[i]);
@@ -138,10 +142,10 @@ Boid.prototype = {
         }
 
         //Avoid Mouse
-        if (calculateDistance(mousePredator, this) < this.eyesight) {
+        /*if (calculateDistance(mousePredator, this) < this.eyesight) {
             var mouseModifier = 20;
             this.avoidOrAttract("avoid", mousePredator, mouseModifier);
-        }
+        }*/
 
         this.wallAvoid(ctx);
         this.limitVelocity();
@@ -180,7 +184,6 @@ Boid.prototype = {
             this.health++;
             this.hunger = 0;
         }
-        this.metabolism();
     },
     handleOther: function(other) {
         if (other.type === "predator") {
@@ -239,8 +242,8 @@ function Predator(x, y) {
 
     //body
     this.maturity = 6;
-    this.speed = 5.5;
-    this.hungerLimit = 12000;
+    this.speed = 6;
+    this.hungerLimit = 25000;
     this.color = 'rgb(' + ~~random(100,250) + ',' + ~~random(10,30) + ',' + ~~random(10,30) + ')';
 
     //brains
@@ -254,7 +257,6 @@ Predator.prototype.eat = function(other) {
         this.health++;
         this.hunger = 0;
     }
-    this.metabolism();
 };
 
 Predator.prototype.handleOther = function(other) {
@@ -263,7 +265,7 @@ Predator.prototype.handleOther = function(other) {
     }
 };
 
-Predator.prototype.mitosis = function() {
+Predator.prototype.mitosis = function(boids) {
     if (this.health >= this.maturity) {
         //reset old boid
         this.health = 1;
@@ -276,6 +278,67 @@ Predator.prototype.mitosis = function() {
 
         boids.push(birthedBoid);
     }
+};
+
+Plant.prototype = new Boid();
+Plant.prototype.constructor = Plant;
+Plant.constructor = Boid.prototype.constructor;
+
+function Plant(x, y) {
+    this.init(x, y);
+
+    this.type = "plant";
+
+    //body
+    this.speed = 0;
+    this.size = 10;
+    this.health = ~~random(1, 15);
+    this.color = 'rgb(' + ~~random(130,210)  + ',' + ~~random(40,140) + ',' + ~~random(160,220) + ')';
+
+    //brains
+    this.eyesight = 0;
+    this.flockDistance = 0;
+    this.eyesight = 0; //range for object dectection
+    this.personalSpace = 100; //distance to avoid safe objects
+    this.flightDistance = 0; //distance to avoid scary objects
+    this.flockDistance = 0; //factor that determines how attracted the boid is to the center of the flock
+    this.matchVelFactor = 0; //factor that determines how much the flock velocity affects the boid
+}
+
+Plant.prototype.ai = function(boids, index, ctx) { };
+
+Plant.prototype.move = function() { };
+
+Plant.prototype.mitosis = function(boids) {
+    var growProbability = 1,
+        maxPlants = 40,
+        plantCount = 0;
+
+    for ( m = boids.length - 1; m >= 0; m-- ) {
+        if (boids[m].type === "plant") {
+            plantCount++;
+        }
+    }
+
+    if (plantCount <= maxPlants) {
+        if (random(0,100) <= growProbability) {
+            birthedBoid = new Plant(
+                this.x + random(-this.personalSpace, this.personalSpace),
+                this.y + random(-this.personalSpace, this.personalSpace)
+            );
+            birthedBoid.color = this.color;
+
+            boids.push(birthedBoid);
+        }
+    }
+};
+
+Plant.prototype.draw = function(ctx) {
+    var drawSize = this.size + this.health;
+    ctx.fillStyle = this.color;
+    ctx.shadowBlur = 40;
+    ctx.shadowColor = this.color;
+    ctx.fillRect(this.x - drawSize, this.y + drawSize, drawSize, drawSize);
 };
 
 /***********************
@@ -296,9 +359,13 @@ sim.setup = function() {
     };
 
 sim.spawn = function( x, y) {
-        var predatorProbability = 5;
+        var predatorProbability = 25,
+            plantProbability = 5,
+            growRandom = random(0,100);
 
-        if (random(0,100) <= predatorProbability) {
+        if (growRandom <= plantProbability) {
+            boid = new Plant(x, y);
+        } else if (growRandom <= predatorProbability) {
             boid = new Predator(x, y);
         } else {
             boid = new Boid(x, y);
@@ -313,7 +380,8 @@ sim.update = function() {
 
                 boids[i].ai(boids, i, sim);
                 boids[i].move();
-                boids[i].mitosis();
+                boids[i].metabolism();
+                boids[i].mitosis(boids);
 
             } else {
                 //remove dead boid
