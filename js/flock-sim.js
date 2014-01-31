@@ -18,6 +18,27 @@ var random = function( min, max ) {
     return min + Math.random() * ( max - min );
 };
 
+var getRandomItem = function(list, weight) {
+    var total_weight = weight.reduce(function (prev, cur, i, arr) {
+        return prev + cur;
+    });
+     
+    var random_num = random(0, total_weight);
+    var weight_sum = 0;
+    //console.log(random_num)
+     
+    for (var i = 0; i < list.length; i++) {
+        weight_sum += weight[i];
+        weight_sum = +weight_sum.toFixed(2);
+         
+        if (random_num <= weight_sum) {
+            return list[i];
+        }
+    }
+     
+    // end of function
+};
+
 /***********************
 BOID
 ***********************/
@@ -31,11 +52,13 @@ Boid.prototype = {
         this.type = "boid";
         this.alive = true;
         this.health = 1;
-        this.maturity = 3;
+        this.maturity = 4;
         this.speed = 6;
         this.size = 5;
         this.hungerLimit = 12000;
         this.hunger = 0;
+        this.isFull = false;
+        this.digestTime = 400;
         this.color = 'rgb(' + ~~random(0,100) + ',' + ~~random(50,220) + ',' + ~~random(50,220) + ')';
 
         //brains
@@ -43,7 +66,7 @@ Boid.prototype = {
         this.personalSpace = 20; //distance to avoid safe objects
         this.flightDistance = 60; //distance to avoid scary objects
         this.flockDistance = 200; //factor that determines how attracted the boid is to the center of the flock
-        this.matchVelFactor = 4; //factor that determines how much the flock velocity affects the boid
+        this.matchVelFactor = 10; //factor that determines how much the flock velocity affects the boid. less = more matching
 
         this.x = x || 0.0;
         this.y = y || 0.0;
@@ -92,7 +115,7 @@ Boid.prototype = {
             x: ((typeof ctx.touches[0] === "undefined") ? 0 : ctx.touches[0].x),
             y: ((typeof ctx.touches[0] === "undefined") ? 0 : ctx.touches[0].y)
         };
-
+        
         for (var i = 0; i < boids.length; i++) {
             if (i != index) {
 
@@ -142,10 +165,10 @@ Boid.prototype = {
         }
 
         //Avoid Mouse
-        /*if (calculateDistance(mousePredator, this) < this.eyesight) {
+        if (calculateDistance(mousePredator, this) < this.eyesight) {
             var mouseModifier = 20;
             this.avoidOrAttract("avoid", mousePredator, mouseModifier);
-        }*/
+        }
 
         this.wallAvoid(ctx);
         this.limitVelocity();
@@ -176,13 +199,21 @@ Boid.prototype = {
     move: function() {
         this.x += this.v.x;
         this.y += this.v.y;
-        this.hunger += this.v.mag;
+        if (this.v.mag > this.speed) {
+            this.hunger += this.speed;    
+        } else {
+            this.hunger += this.v.mag;
+        }
+        
     },
     eat: function(other) {
-        if (other.type === "plant") {
-            other.health--;
-            this.health++;
-            this.hunger = 0;
+        if (!this.isFull) {
+            if (other.type === "plant") {
+                other.health--;
+                this.health++;
+                this.isFull = true;
+                this.hunger = 0;
+            }
         }
     },
     handleOther: function(other) {
@@ -194,6 +225,10 @@ Boid.prototype = {
         if (this.hunger >= this.hungerLimit) {
             this.health--;
             this.hunger = 0;
+        }
+
+        if (this.hunger >= this.digestTime) {
+            this.isFull = false;
         }
 
         if (this.health <= 0) {
@@ -252,16 +287,21 @@ function Predator(x, y) {
 }
 
 Predator.prototype.eat = function(other) {
-    if (other.type === "boid") {
-        other.health--;
-        this.health++;
-        this.hunger = 0;
+    if (!this.isFull) {
+        if (other.type === "boid") {
+            other.health--;
+            this.health++;
+            this.isFull = true;
+            this.hunger = 0;
+        }
     }
 };
 
 Predator.prototype.handleOther = function(other) {
     if (other.type === "boid") {
-        this.avoidOrAttract("attract", other);
+        if (!this.isFull) {
+            this.avoidOrAttract("attract", other);
+        }
     }
 };
 
@@ -292,7 +332,7 @@ function Plant(x, y) {
     //body
     this.speed = 0;
     this.size = 10;
-    this.health = ~~random(1, 15);
+    this.health = ~~random(1, 10);
     this.color = 'rgb(' + ~~random(130,210)  + ',' + ~~random(40,140) + ',' + ~~random(160,220) + ')';
 
     //brains
@@ -352,24 +392,29 @@ var sim = Sketch.create({
 
 sim.setup = function() {
         for ( i = 0; i < 50; i++ ) {
-            x = ( sim.width * 0.5 ) + random( -300, 300 );
-            y = ( sim.height * 0.5 ) + random( -300, 300 );
+            x = random(0, sim.width);
+            y = random(0, sim.height);
             sim.spawn( x, y);
         }
     };
 
 sim.spawn = function( x, y) {
-        var predatorProbability = 25,
-            plantProbability = 5,
-            growRandom = random(0,100);
+        var predatorProbability = 0.3,
+            plantProbability = 0.3;
+            
 
-        if (growRandom <= plantProbability) {
-            boid = new Plant(x, y);
-        } else if (growRandom <= predatorProbability) {
-            boid = new Predator(x, y);
-        } else {
-            boid = new Boid(x, y);
+        switch(getRandomItem(['boid','predator','plant'],[1 - predatorProbability - plantProbability, predatorProbability, plantProbability])) {
+            case 'predator':
+                boid = new Predator(x, y);
+                break;
+            case 'plant':
+                boid = new Plant(x, y);
+                break;
+            default:
+                boid = new Boid(x, y);
+                break;
         }
+
         boids.push( boid );
     };
 
@@ -397,4 +442,6 @@ sim.draw = function() {
         for ( i = boids.length - 1; i >= 0; i-- ) {
             boids[i].draw( sim );
         }
+
+        sim.fillText(boids.length, 20, 20);
     };
