@@ -1,26 +1,3 @@
-var calculateDistance = function(object1, object2){
-    x = Math.abs(object1.x - object2.x);
-    y = Math.abs(object1.y - object2.y);
-
-    return Math.sqrt((x * x) + (y * y));
-};
-
-var calcMagnitude = function(x, y) {
-    return Math.sqrt((x * x) + (y * y));
-};
-
-var calcVectorAdd = function(v1, v2) {
-    return {x: v1.x + v2.x, y: v1.y + v2.y};
-};
-
-var random = function( min, max ) {
-
-    return min + Math.random() * ( max - min );
-};
-
-/***********************
-BOID
-***********************/
 function Boid(x, y) {
     this.init(x, y);
 }
@@ -55,7 +32,7 @@ Boid.prototype = {
 
     },
     wallAvoid: function(ctx) {
-        wallModifier = 6;
+        wallModifier = 30;
         //each side of the screen becomes an object that to be avoided factored into the birds movement
         wallLeft = {
             x: 0,
@@ -78,19 +55,19 @@ Boid.prototype = {
             y: 0
         };
 
-        if (calculateDistance(wallLeft, this) < this.eyesight) {
+        if (calculateDistance(wallLeft, this) < this.personalSpace + this.radius) {
                         wallAvoid.x -= (wallLeft.x - this.x) * wallModifier;
                         wallAvoid.y -= (wallLeft.y - this.y) * wallModifier;
         }
-        if (calculateDistance(wallTop, this) < this.eyesight) {
+        if (calculateDistance(wallTop, this) < this.personalSpace + this.radius) {
                         wallAvoid.x -= (wallTop.x - this.x) * wallModifier;
                         wallAvoid.y -= (wallTop.y - this.y) * wallModifier;
         }
-        if (calculateDistance(wallRight, this) < this.eyesight) {
+        if (calculateDistance(wallRight, this) < this.personalSpace + this.radius) {
                         wallAvoid.x -= (wallRight.x - this.x) * wallModifier;
                         wallAvoid.y -= (wallRight.y - this.y) * wallModifier;
         }
-        if (calculateDistance(wallBottom, this) < this.eyesight) {
+        if (calculateDistance(wallBottom, this) < this.personalSpace + this.radius) {
                         wallAvoid.x -= (wallBottom.x - this.x) * wallModifier;
                         wallAvoid.y -= (wallBottom.y - this.y) * wallModifier;
         }
@@ -133,7 +110,7 @@ Boid.prototype = {
                         percievedVelocity.count++;
 
                         //Separation
-                        if (dist < this.personalSpace + this.size + this.health) {
+                        if (dist < this.personalSpace + this.radius + this.health) {
                             this.avoidOrAttract("avoid", boids[i], this.personalSpace);
                         }
                     } else {
@@ -175,11 +152,11 @@ Boid.prototype = {
         this.v.y = this.v.y / magnitude;
     },
     avoidOrAttract: function(action, other, modifier) {
-        var newVector = {x: 0, y: 0};
+        newVector = {x: 0, y: 0};
         var direction = ((action === "avoid") ? -1 : 1);
-        var vModifier = modifier || 1;
-        newVector.x += ( (other.x - this.x) * vModifier ) * direction;
-        newVector.y += ( (other.y - this.y) * vModifier ) * direction;
+
+        newVector.x += ( (other.x - this.x) * modifier ) * direction;
+        newVector.y += ( (other.y - this.y) * modifier ) * direction;
         this.v = calcVectorAdd(this.v, newVector);
     },
     move: function() {
@@ -214,10 +191,11 @@ Boid.prototype = {
             //reset old boid
             this.health = 1;
 
-            birthedBoid = new Boid(
+            birthedBoid = new Boid();
+            birthedBoid.init(
                 this.x + random(-this.personalSpace, this.personalSpace),
-                this.y + random(-this.personalSpace, this.personalSpace)
-            );
+                this.y + random(-this.personalSpace, this.personalSpace),
+                this.predator);
             birthedBoid.color = this.color;
 
             boids.push(birthedBoid);
@@ -225,7 +203,7 @@ Boid.prototype = {
     },
     draw: function( ctx ) {
 
-        drawSize = this.size + this.health;
+        drawSize = this.radius + this.health;
 
         ctx.beginPath();
         ctx.moveTo( this.x + ( this.v.x * drawSize ), this.y + ( this.v.y * drawSize ));
@@ -233,6 +211,7 @@ Boid.prototype = {
         ctx.lineTo( this.x - ( this.v.x * drawSize * 2 ), this.y - ( this.v.y * drawSize * 2 ));
         ctx.lineTo( this.x - ( this.v.y * drawSize ), this.y + ( this.v.x * drawSize ));
         ctx.lineTo( this.x + ( this.v.x * drawSize ), this.y + ( this.v.y * drawSize ));
+        //ctx.arc( this.x, this.y, this.radius + this.health, 0, TWO_PI );
         ctx.fillStyle = this.color;
         ctx.shadowBlur = 20;
         ctx.shadowColor = this.color;
@@ -252,7 +231,7 @@ function Predator(x, y) {
     //body
     this.maturity = 6;
     this.speed = 5.5;
-    this.hungerLimit = 12000;
+    this.hungerLimit = 800;
     this.color = 'rgb(' + ~~random(100,250) + ',' + ~~random(10,30) + ',' + ~~random(10,30) + ')';
 
     //brains
@@ -266,79 +245,37 @@ Predator.prototype.eat = function(other) {
         this.health++;
         this.hunger = 0;
     }
-};
+}
 
 Predator.prototype.handleOther = function(other) {
     if (other.type === "boid") {
         this.avoidOrAttract("attract", other);
     }
-};
+}
 
-Predator.prototype.mitosis = function() {
-    if (this.health >= this.maturity) {
-        //reset old boid
-        this.health = 1;
 
-        birthedBoid = new Predator(
-            this.x + random(-this.personalSpace, this.personalSpace),
-            this.y + random(-this.personalSpace, this.personalSpace)
-        );
-        birthedBoid.color = this.color;
-
-        boids.push(birthedBoid);
-    }
-};
 
 /***********************
-SIM
+PLANTS
 ***********************/
-var boids = [];
+function Plant(x, y) {
+    this.init(x, y);
+}
 
-var sim = Sketch.create({
-        container: document.getElementById( 'container' )
-    });
+Plant.prototype = {
+    init: function(x, y) {
+        this.alive = true;
+        this.x = x;
+        this.y = y;
 
-sim.setup = function() {
-        for ( i = 0; i < 50; i++ ) {
-            x = ( sim.width * 0.5 ) + random( -300, 300 );
-            y = ( sim.height * 0.5 ) + random( -300, 300 );
-            sim.spawn( x, y);
-        }
-    };
-
-sim.spawn = function( x, y) {
-        var predatorProbability = 5;
-
-        if (random(0,100) <= predatorProbability) {
-            boid = new Predator(x, y);
-        } else {
-            boid = new Boid(x, y);
-        }
-        boids.push( boid );
-    };
-
-sim.update = function() {
-
-        for ( i = boids.length - 1; i >= 0; i-- ) {
-            if (boids[i].alive) {
-
-                boids[i].ai(boids, i, sim);
-                boids[i].move();
-                boids[i].metabolism();
-                boids[i].mitosis();
-
-            } else {
-                //remove dead boid
-                boids.splice(i,1);
-            }
-        }
+        this.food = ~~random(1, 15);
+        this.size = 20 + this.food;
+        this.color = 'rgb(' + ~~random(130,210)  + ',' + ~~random(40,140) + ',' + ~~random(160,220) + ')';
+    },
+    draw: function(ctx) {
+        ctx.fillStyle = this.color;
+        ctx.shadowBlur = 40;
+        ctx.shadowColor = this.color;
+        ctx.fillRect(this.x - this.size, this.y + this.size, this.size, this.size);
+    }
 };
-
-sim.draw = function() {
-
-        sim.globalCompositeOperation  = 'lighter';
-
-        for ( i = boids.length - 1; i >= 0; i-- ) {
-            boids[i].draw( sim );
-        }
-    };
