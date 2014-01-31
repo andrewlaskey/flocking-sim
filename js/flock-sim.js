@@ -24,6 +24,7 @@ function isPredator(boid) {
     //body
     boid.maturity = 6;
     boid.speed = 5.5;
+    this.hungerLimit = 800;
     boid.color = 'rgb(' + ~~random(100,250) + ',' + ~~random(10,30) + ',' + ~~random(10,30) + ')';
 
     //brains
@@ -42,6 +43,8 @@ Boid.prototype = {
         this.maturity = 3;
         this.speed = 6;
         this.radius = 5;
+        this.hungerLimit = 20000;
+        this.hunger = 0;
         this.color = 'rgb(' + ~~random(0,100) + ',' + ~~random(50,220) + ',' + ~~random(50,220) + ')';
 
         //brains
@@ -59,8 +62,6 @@ Boid.prototype = {
             x: random(-1, 1),
             y: random(-1, 1)
         };
-
-        this.distanceTraveled = 0;
 
     },
     wallAvoid: function(ctx) {
@@ -202,21 +203,44 @@ Boid.prototype = {
     move: function() {
         this.x += this.v.x * this.speed;
         this.y += this.v.y * this.speed;
-        this.distanceTraveled = calcMagnitude(this.v.x * this.speed, this.v.y * this.speed);
+        this.hunger += calcMagnitude(this.v.x * this.speed, this.v.y * this.speed);
     },
-    eat: function(boids, index) {
+    eat: function(boids, index, plants) {
         if (this.predator) {
             for ( var k = boids.length - 1; k >= 0; k-- ) {
                 if (index !== k && !boids[k].predator) {
 
                     dist = calculateDistance(this, boids[k]);
 
-                    if (dist < this.radius + this.radius) {
+                    if (dist < this.radius + boids[k].radius) {
                         //kill boid k
                         boids[k].alive = false;
                         this.health++;
+                        this.hunger = 0;
                     }
                 }
+            }
+        } else {
+            for ( var k = plants.length - 1; k >= 0; k-- ) {
+                dist = calculateDistance(this, plants[k]);
+
+                if (dist < this.radius + plants[k].size) {
+
+                    plants[k].food--;
+                    if (plants[k].food <= 0) {
+                        plants[k].alive = false;
+                    }
+                    this.health++;
+                    this.hunger = 0;
+                }
+            }
+        }
+        if (this.hunger >= this.hungerLimit) {
+            this.health--;
+            this.hunger = 0;
+
+            if (this.health <= 0) {
+                this.alive = false;
             }
         }
     },
@@ -253,11 +277,37 @@ Boid.prototype = {
     }
 };
 
-var boids = [];
+/***********************
+PLANTS
+***********************/
+function Plant(x, y) {
+    this.init(x, y);
+}
+
+Plant.prototype = {
+    init: function(x, y) {
+        this.alive = true;
+        this.x = x;
+        this.y = y;
+
+        this.food = ~~random(1, 15);
+        this.size = 20 + this.food;
+        this.color = 'rgb(' + ~~random(130,210)  + ',' + ~~random(40,140) + ',' + ~~random(160,220) + ')';
+    },
+    draw: function(ctx) {
+        ctx.fillStyle = this.color;
+        ctx.shadowBlur = 40;
+        ctx.shadowColor = this.color;
+        ctx.fillRect(this.x - this.size, this.y + this.size, this.size, this.size);
+    }
+};
 
 /***********************
 SIM
 ***********************/
+var boids = [];
+var plants = [];
+var maxPlants = 100;
 
 var sim = Sketch.create({
         container: document.getElementById( 'container' )
@@ -265,8 +315,8 @@ var sim = Sketch.create({
 
 sim.setup = function() {
         for ( i = 0; i < 50; i++ ) {
-            x = ( sim.width * 0.5 ) + random( -100, 100 );
-            y = ( sim.height * 0.5 ) + random( -100, 100 );
+            x = ( sim.width * 0.5 ) + random( -300, 300 );
+            y = ( sim.height * 0.5 ) + random( -300, 300 );
             sim.spawn( x, y, false );
         }
         for ( i = 0; i < 5; i++ ) {
@@ -287,14 +337,26 @@ sim.spawn = function( x, y, predator ) {
         boids.push( boid );
     };
 
+sim.GrowPlants = function() {
+    var plantProbability = 5;
+    if (random(0,100) <= plantProbability) {
+        x = random( 30, sim.width - 30);
+        y = random( 30, sim.height - 30);
+
+        plant = new Plant();
+        plant.init(x, y);
+        plants.push(plant);
+    }
+};
+
 sim.update = function() {
 
-        for ( var i = boids.length - 1; i >= 0; i-- ) {
+        for ( i = boids.length - 1; i >= 0; i-- ) {
             if (boids[i].alive) {
 
                 boids[i].ai(boids, i, sim);
                 boids[i].move();
-                boids[i].eat(boids,i);
+                boids[i].eat(boids,i,plants);
                 boids[i].mitosis(boids);
 
             } else {
@@ -302,13 +364,27 @@ sim.update = function() {
                 boids.splice(i,1);
             }
         }
+
+        for ( i = plants.length - 1; i >= 0; i-- ) {
+            if (!plants[i].alive) {
+                plants.splice(i,1);
+            }
+        }
+
+        if (plants.length < maxPlants) {
+            sim.GrowPlants();
+        }
 };
 
 sim.draw = function() {
 
         sim.globalCompositeOperation  = 'lighter';
 
-        for ( var i = boids.length - 1; i >= 0; i-- ) {
+        for ( i = boids.length - 1; i >= 0; i-- ) {
             boids[i].draw( sim );
+        }
+
+        for ( i = plants.length - 1; i >= 0; i-- ) {
+            plants[i].draw(sim);
         }
     };
