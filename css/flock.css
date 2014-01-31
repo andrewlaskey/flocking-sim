@@ -1,28 +1,20 @@
 	body{
-		margin:50px 0px; padding:0px;
 		text-align:center;
-		background: #fff;
-	}
-	
-	#a {
-		display: block;
-		margin: 0 auto;
-		width: 1200px;
-		height: 600px;
-		background-image: url('aquascape.png');
+		background-color: #222;
 	}
 	
 	header {
+		position: fixed;
+		top: 0;
+		left: 0;
+		right: 0;
 		text-align: left;
 		font-family: 'Courier New';
 		font-size: 12px;
-		width: 1200px;
 		height: 20px;
 		line-height: 20px;
-		margin: 0 auto;
 		padding: 0;
 		display: block;
-		position: relative;
 	}
 	
 	
