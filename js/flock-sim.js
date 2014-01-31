@@ -1,118 +1,107 @@
 var calculateDistance = function(object1, object2){
-    x = abs(object1.x - object2.x);
-    y = abs(object1.y - object2.y);
+    x = Math.abs(object1.x - object2.x);
+    y = Math.abs(object1.y - object2.y);
 
-    return sqrt((x * x) + (y * y));
+    return Math.sqrt((x * x) + (y * y));
 };
 
 var calcMagnitude = function(x, y) {
-    return sqrt((x * x) + (y * y));
+    return Math.sqrt((x * x) + (y * y));
 };
 
 var calcVectorAdd = function(v1, v2) {
     return {x: v1.x + v2.x, y: v1.y + v2.y};
 };
 
+var random = function( min, max ) {
+
+    return min + Math.random() * ( max - min );
+};
+
+var getRandomItem = function(list, weight) {
+    var total_weight = weight.reduce(function (prev, cur, i, arr) {
+        return prev + cur;
+    });
+     
+    var random_num = random(0, total_weight);
+    var weight_sum = 0;
+    //console.log(random_num)
+     
+    for (var i = 0; i < list.length; i++) {
+        weight_sum += weight[i];
+        weight_sum = +weight_sum.toFixed(2);
+         
+        if (random_num <= weight_sum) {
+            return list[i];
+        }
+    }
+     
+    // end of function
+};
+
 /***********************
 BOID
 ***********************/
-function Boid(x, y, predator) {
-    this.init(x, y, predator);
-}
-
-function isPredator(boid) {
-    //body
-    boid.maturity = 6;
-    boid.speed = 5.5;
-    this.hungerLimit = 800;
-    boid.color = 'rgb(' + ~~random(100,250) + ',' + ~~random(10,30) + ',' + ~~random(10,30) + ')';
-
-    //brains
-    boid.predator = true;
-    boid.eyesight = 150;
-    boid.flockDistance = 300;
-
-    return boid;
+function Boid(x, y) {
+    this.init(x, y);
 }
 
 Boid.prototype = {
-    init: function(x, y, predator) {
+    init: function(x, y) {
         //body
+        this.type = "boid";
         this.alive = true;
         this.health = 1;
-        this.maturity = 3;
+        this.maturity = 4;
         this.speed = 6;
-        this.radius = 5;
-        this.hungerLimit = 20000;
+        this.size = 5;
+        this.hungerLimit = 12000;
         this.hunger = 0;
+        this.isFull = false;
+        this.digestTime = 400;
         this.color = 'rgb(' + ~~random(0,100) + ',' + ~~random(50,220) + ',' + ~~random(50,220) + ')';
 
         //brains
-        this.predator = predator || false;
         this.eyesight = 100; //range for object dectection
         this.personalSpace = 20; //distance to avoid safe objects
         this.flightDistance = 60; //distance to avoid scary objects
         this.flockDistance = 200; //factor that determines how attracted the boid is to the center of the flock
-        this.matchVelFactor = 4; //factor that determines how much the flock velocity affects the boid
+        this.matchVelFactor = 10; //factor that determines how much the flock velocity affects the boid. less = more matching
 
         this.x = x || 0.0;
         this.y = y || 0.0;
 
         this.v = {
             x: random(-1, 1),
-            y: random(-1, 1)
+            y: random(-1, 1),
+            mag: 0
         };
+
+        this.unitV = {
+            x: 0,
+            y: 0,
+        };
+
+        this.v.mag = calcMagnitude(this.v.x, this.v.y);
+        this.unitV.x = (this.v.x / this.v.mag);
+        this.unitV.y = (this.v.y / this.v.mag);
 
     },
     wallAvoid: function(ctx) {
-        wallModifier = 30;
-        //each side of the screen becomes an object that to be avoided factored into the birds movement
-        wallLeft = {
-            x: 0,
-            y: this.y
-        };
-        wallTop = {
-            x: this.x,
-            y: 0
-        };
-        wallRight = {
-            x: ctx.width,
-            y: this.y
-        };
-        wallBottom = {
-            x: this.x,
-            y: ctx.height
-        };
-        wallAvoid = {
-            x: 0,
-            y: 0
-        };
-
-        if (calculateDistance(wallLeft, this) < this.personalSpace + this.radius) {
-                        wallAvoid.x -= (wallLeft.x - this.x) * wallModifier;
-                        wallAvoid.y -= (wallLeft.y - this.y) * wallModifier;
+        var wallPad = 10;
+        if (this.x < wallPad) {
+            this.v.x = this.speed;
+        } else if (this.x > ctx.width - wallPad) {
+            this.v.x = -this.speed;
         }
-        if (calculateDistance(wallTop, this) < this.personalSpace + this.radius) {
-                        wallAvoid.x -= (wallTop.x - this.x) * wallModifier;
-                        wallAvoid.y -= (wallTop.y - this.y) * wallModifier;
+        if (this.y < wallPad) {
+            this.v.y = this.speed;
+        } else if (this.y > ctx.height - wallPad) {
+            this.v.y = -this.speed;
         }
-        if (calculateDistance(wallRight, this) < this.personalSpace + this.radius) {
-                        wallAvoid.x -= (wallRight.x - this.x) * wallModifier;
-                        wallAvoid.y -= (wallRight.y - this.y) * wallModifier;
-        }
-        if (calculateDistance(wallBottom, this) < this.personalSpace + this.radius) {
-                        wallAvoid.x -= (wallBottom.x - this.x) * wallModifier;
-                        wallAvoid.y -= (wallBottom.y - this.y) * wallModifier;
-        }
-        this.v = calcVectorAdd(this.v, wallAvoid);
     },
     ai: function(boids, index, ctx) {
         percievedCenter = {
-            x: 0,
-            y: 0,
-            count: 0
-        };
-        repellCenter = {
             x: 0,
             y: 0,
             count: 0
@@ -126,12 +115,7 @@ Boid.prototype = {
             x: ((typeof ctx.touches[0] === "undefined") ? 0 : ctx.touches[0].x),
             y: ((typeof ctx.touches[0] === "undefined") ? 0 : ctx.touches[0].y)
         };
-        fleeOrHuntVector = {
-            x: 0,
-            y: 0,
-            count: 0
-        };
-
+        
         for (var i = 0; i < boids.length; i++) {
             if (i != index) {
 
@@ -140,7 +124,7 @@ Boid.prototype = {
                 //Find all other boids close to it
                 if (dist < this.eyesight) {
                     //if the same species then flock
-                    if (boids[i].predator == this.predator) {
+                    if (boids[i].type == this.type) {
 
                         //Alignment
                         percievedCenter.x += boids[i].x;
@@ -153,26 +137,21 @@ Boid.prototype = {
                         percievedVelocity.count++;
 
                         //Separation
-                        if (calculateDistance(boids[i], this) < this.personalSpace + this.radius + this.health) {
-                            repellCenter.x -= (boids[i].x - this.x) * this.personalSpace;
-                            repellCenter.y -= (boids[i].y - this.y) * this.personalSpace;
-                            this.v = calcVectorAdd(this.v, repellCenter);
+                        if (dist < this.personalSpace + this.size + this.health) {
+                            this.avoidOrAttract("avoid", boids[i], this.personalSpace);
                         }
                     } else {
-                        //avoid or hunt
-                        if (this.predator) {
-                            fleeOrHuntVector.x += boids[i].x - this.x;
-                            fleeOrHuntVector.y += boids[i].y - this.y;
+                        //if other species fight or flight
+                        if (dist < this.size + this.health + boids[i].size + boids[i].health) {
+                            this.eat(boids[i]);
                         } else {
-                            fleeOrHuntVector.x -= boids[i].x - this.x;
-                            fleeOrHuntVector.y -= boids[i].y - this.y;
+                            this.handleOther(boids[i]);
                         }
-                        this.v = calcVectorAdd(this.v, fleeOrHuntVector);
                     }
+                }//if close enough
+            }//dont check itself
+        }//Loop through boids
 
-                }
-            }
-        }
         //Get the average for all near boids
         if (percievedCenter.count > 0) {
             percievedCenter.x = ((percievedCenter.x / percievedCenter.count) - this.x) / this.flockDistance;
@@ -185,63 +164,75 @@ Boid.prototype = {
             this.v = calcVectorAdd(this.v, percievedVelocity);
         }
 
-        //avoid mouse
+        //Avoid Mouse
         if (calculateDistance(mousePredator, this) < this.eyesight) {
             var mouseModifier = 20;
-            mousePredator.x -= (mousePredator.x - this.x) * mouseModifier;
-            mousePredator.y -= (mousePredator.y - this.y) * mouseModifier;
-            this.v = calcVectorAdd(this.v, mousePredator);
+            this.avoidOrAttract("avoid", mousePredator, mouseModifier);
         }
+
         this.wallAvoid(ctx);
-        this.setUnitVector();
+        this.limitVelocity();
     },
     setUnitVector: function() {
         var magnitude = calcMagnitude(this.v.x, this.v.y);
         this.v.x = this.v.x / magnitude;
         this.v.y = this.v.y / magnitude;
     },
-    move: function() {
-        this.x += this.v.x * this.speed;
-        this.y += this.v.y * this.speed;
-        this.hunger += calcMagnitude(this.v.x * this.speed, this.v.y * this.speed);
+    limitVelocity: function() {
+        this.v.mag = calcMagnitude(this.v.x, this.v.y);
+        this.unitV.x = (this.v.x / this.v.mag);
+        this.unitV.y = (this.v.y / this.v.mag);
+
+        if (this.v.mag > this.speed) {
+            this.v.x = this.unitV.x * this.speed;
+            this.v.y = this.unitV.y * this.speed;
+        }
     },
-    eat: function(boids, index, plants) {
-        if (this.predator) {
-            for ( var k = boids.length - 1; k >= 0; k-- ) {
-                if (index !== k && !boids[k].predator) {
-
-                    dist = calculateDistance(this, boids[k]);
-
-                    if (dist < this.radius + boids[k].radius) {
-                        //kill boid k
-                        boids[k].alive = false;
-                        this.health++;
-                        this.hunger = 0;
-                    }
-                }
-            }
+    avoidOrAttract: function(action, other, modifier) {
+        var newVector = {x: 0, y: 0};
+        var direction = ((action === "avoid") ? -1 : 1);
+        var vModifier = modifier || 1;
+        newVector.x += ( (other.x - this.x) * vModifier ) * direction;
+        newVector.y += ( (other.y - this.y) * vModifier ) * direction;
+        this.v = calcVectorAdd(this.v, newVector);
+    },
+    move: function() {
+        this.x += this.v.x;
+        this.y += this.v.y;
+        if (this.v.mag > this.speed) {
+            this.hunger += this.speed;    
         } else {
-            for ( var k = plants.length - 1; k >= 0; k-- ) {
-                dist = calculateDistance(this, plants[k]);
-
-                if (dist < this.radius + plants[k].size) {
-
-                    plants[k].food--;
-                    if (plants[k].food <= 0) {
-                        plants[k].alive = false;
-                    }
-                    this.health++;
-                    this.hunger = 0;
-                }
+            this.hunger += this.v.mag;
+        }
+        
+    },
+    eat: function(other) {
+        if (!this.isFull) {
+            if (other.type === "plant") {
+                other.health--;
+                this.health++;
+                this.isFull = true;
+                this.hunger = 0;
             }
         }
+    },
+    handleOther: function(other) {
+        if (other.type === "predator") {
+            this.avoidOrAttract("avoid", other);
+        }
+    },
+    metabolism: function() {
         if (this.hunger >= this.hungerLimit) {
             this.health--;
             this.hunger = 0;
+        }
 
-            if (this.health <= 0) {
-                this.alive = false;
-            }
+        if (this.hunger >= this.digestTime) {
+            this.isFull = false;
+        }
+
+        if (this.health <= 0) {
+            this.alive = false;
         }
     },
     mitosis: function(boids) {
@@ -249,11 +240,10 @@ Boid.prototype = {
             //reset old boid
             this.health = 1;
 
-            birthedBoid = new Boid();
-            birthedBoid.init(
+            birthedBoid = new Boid(
                 this.x + random(-this.personalSpace, this.personalSpace),
-                this.y + random(-this.personalSpace, this.personalSpace),
-                this.predator);
+                this.y + random(-this.personalSpace, this.personalSpace)
+            );
             birthedBoid.color = this.color;
 
             boids.push(birthedBoid);
@@ -261,15 +251,14 @@ Boid.prototype = {
     },
     draw: function( ctx ) {
 
-        drawSize = this.radius + this.health;
+        drawSize = this.size + this.health;
 
         ctx.beginPath();
-        ctx.moveTo( this.x + ( this.v.x * drawSize ), this.y + ( this.v.y * drawSize ));
-        ctx.lineTo( this.x + ( this.v.y * drawSize ), this.y - ( this.v.x * drawSize ));
-        ctx.lineTo( this.x - ( this.v.x * drawSize * 2 ), this.y - ( this.v.y * drawSize * 2 ));
-        ctx.lineTo( this.x - ( this.v.y * drawSize ), this.y + ( this.v.x * drawSize ));
-        ctx.lineTo( this.x + ( this.v.x * drawSize ), this.y + ( this.v.y * drawSize ));
-        //ctx.arc( this.x, this.y, this.radius + this.health, 0, TWO_PI );
+        ctx.moveTo( this.x + ( this.unitV.x * drawSize ), this.y + ( this.unitV.y * drawSize ));
+        ctx.lineTo( this.x + ( this.unitV.y * drawSize ), this.y - ( this.unitV.x * drawSize ));
+        ctx.lineTo( this.x - ( this.unitV.x * drawSize * 2 ), this.y - ( this.unitV.y * drawSize * 2 ));
+        ctx.lineTo( this.x - ( this.unitV.y * drawSize ), this.y + ( this.unitV.x * drawSize ));
+        ctx.lineTo( this.x + ( this.unitV.x * drawSize ), this.y + ( this.unitV.y * drawSize ));
         ctx.fillStyle = this.color;
         ctx.shadowBlur = 20;
         ctx.shadowColor = this.color;
@@ -277,37 +266,125 @@ Boid.prototype = {
     }
 };
 
-/***********************
-PLANTS
-***********************/
-function Plant(x, y) {
+Predator.prototype = new Boid();
+Predator.prototype.constructor = Predator;
+Predator.constructor = Boid.prototype.constructor;
+
+function Predator(x, y) {
     this.init(x, y);
+
+    this.type = "predator";
+
+    //body
+    this.maturity = 6;
+    this.speed = 6;
+    this.hungerLimit = 25000;
+    this.color = 'rgb(' + ~~random(100,250) + ',' + ~~random(10,30) + ',' + ~~random(10,30) + ')';
+
+    //brains
+    this.eyesight = 150;
+    this.flockDistance = 300;
 }
 
-Plant.prototype = {
-    init: function(x, y) {
-        this.alive = true;
-        this.x = x;
-        this.y = y;
-
-        this.food = ~~random(1, 15);
-        this.size = 20 + this.food;
-        this.color = 'rgb(' + ~~random(130,210)  + ',' + ~~random(40,140) + ',' + ~~random(160,220) + ')';
-    },
-    draw: function(ctx) {
-        ctx.fillStyle = this.color;
-        ctx.shadowBlur = 40;
-        ctx.shadowColor = this.color;
-        ctx.fillRect(this.x - this.size, this.y + this.size, this.size, this.size);
+Predator.prototype.eat = function(other) {
+    if (!this.isFull) {
+        if (other.type === "boid") {
+            other.health--;
+            this.health++;
+            this.isFull = true;
+            this.hunger = 0;
+        }
     }
+};
+
+Predator.prototype.handleOther = function(other) {
+    if (other.type === "boid") {
+        if (!this.isFull) {
+            this.avoidOrAttract("attract", other);
+        }
+    }
+};
+
+Predator.prototype.mitosis = function(boids) {
+    if (this.health >= this.maturity) {
+        //reset old boid
+        this.health = 1;
+
+        birthedBoid = new Predator(
+            this.x + random(-this.personalSpace, this.personalSpace),
+            this.y + random(-this.personalSpace, this.personalSpace)
+        );
+        birthedBoid.color = this.color;
+
+        boids.push(birthedBoid);
+    }
+};
+
+Plant.prototype = new Boid();
+Plant.prototype.constructor = Plant;
+Plant.constructor = Boid.prototype.constructor;
+
+function Plant(x, y) {
+    this.init(x, y);
+
+    this.type = "plant";
+
+    //body
+    this.speed = 0;
+    this.size = 10;
+    this.health = ~~random(1, 10);
+    this.color = 'rgb(' + ~~random(130,210)  + ',' + ~~random(40,140) + ',' + ~~random(160,220) + ')';
+
+    //brains
+    this.eyesight = 0;
+    this.flockDistance = 0;
+    this.eyesight = 0; //range for object dectection
+    this.personalSpace = 100; //distance to avoid safe objects
+    this.flightDistance = 0; //distance to avoid scary objects
+    this.flockDistance = 0; //factor that determines how attracted the boid is to the center of the flock
+    this.matchVelFactor = 0; //factor that determines how much the flock velocity affects the boid
+}
+
+Plant.prototype.ai = function(boids, index, ctx) { };
+
+Plant.prototype.move = function() { };
+
+Plant.prototype.mitosis = function(boids) {
+    var growProbability = 1,
+        maxPlants = 40,
+        plantCount = 0;
+
+    for ( m = boids.length - 1; m >= 0; m-- ) {
+        if (boids[m].type === "plant") {
+            plantCount++;
+        }
+    }
+
+    if (plantCount <= maxPlants) {
+        if (random(0,100) <= growProbability) {
+            birthedBoid = new Plant(
+                this.x + random(-this.personalSpace, this.personalSpace),
+                this.y + random(-this.personalSpace, this.personalSpace)
+            );
+            birthedBoid.color = this.color;
+
+            boids.push(birthedBoid);
+        }
+    }
+};
+
+Plant.prototype.draw = function(ctx) {
+    var drawSize = this.size + this.health;
+    ctx.fillStyle = this.color;
+    ctx.shadowBlur = 40;
+    ctx.shadowColor = this.color;
+    ctx.fillRect(this.x - drawSize, this.y + drawSize, drawSize, drawSize);
 };
 
 /***********************
 SIM
 ***********************/
 var boids = [];
-var plants = [];
-var maxPlants = 100;
 
 var sim = Sketch.create({
         container: document.getElementById( 'container' )
@@ -315,39 +392,31 @@ var sim = Sketch.create({
 
 sim.setup = function() {
         for ( i = 0; i < 50; i++ ) {
-            x = ( sim.width * 0.5 ) + random( -300, 300 );
-            y = ( sim.height * 0.5 ) + random( -300, 300 );
-            sim.spawn( x, y, false );
-        }
-        for ( i = 0; i < 5; i++ ) {
-            x = ( sim.width * 0.5 ) + random( -100, 100 );
-            y = ( sim.height * 0.5 ) + random( -100, 100 );
-            sim.spawn( x, y, true );
+            x = random(0, sim.width);
+            y = random(0, sim.height);
+            sim.spawn( x, y);
         }
     };
 
-sim.spawn = function( x, y, predator ) {
+sim.spawn = function( x, y) {
+        var predatorProbability = 0.3,
+            plantProbability = 0.3;
+            
 
-        boid = new Boid();
-
-        boid.init( x, y, predator );
-        if (predator) {
-            boid = isPredator(boid);
+        switch(getRandomItem(['boid','predator','plant'],[1 - predatorProbability - plantProbability, predatorProbability, plantProbability])) {
+            case 'predator':
+                boid = new Predator(x, y);
+                break;
+            case 'plant':
+                boid = new Plant(x, y);
+                break;
+            default:
+                boid = new Boid(x, y);
+                break;
         }
+
         boids.push( boid );
     };
-
-sim.GrowPlants = function() {
-    var plantProbability = 5;
-    if (random(0,100) <= plantProbability) {
-        x = random( 30, sim.width - 30);
-        y = random( 30, sim.height - 30);
-
-        plant = new Plant();
-        plant.init(x, y);
-        plants.push(plant);
-    }
-};
 
 sim.update = function() {
 
@@ -356,23 +425,13 @@ sim.update = function() {
 
                 boids[i].ai(boids, i, sim);
                 boids[i].move();
-                boids[i].eat(boids,i,plants);
+                boids[i].metabolism();
                 boids[i].mitosis(boids);
 
             } else {
                 //remove dead boid
                 boids.splice(i,1);
             }
-        }
-
-        for ( i = plants.length - 1; i >= 0; i-- ) {
-            if (!plants[i].alive) {
-                plants.splice(i,1);
-            }
-        }
-
-        if (plants.length < maxPlants) {
-            sim.GrowPlants();
         }
 };
 
@@ -384,7 +443,5 @@ sim.draw = function() {
             boids[i].draw( sim );
         }
 
-        for ( i = plants.length - 1; i >= 0; i-- ) {
-            plants[i].draw(sim);
-        }
+        sim.fillText(boids.length, 20, 20);
     };
