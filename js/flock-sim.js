@@ -138,7 +138,7 @@ Boid.prototype = {
 
                         //Separation
                         if (dist < this.personalSpace + this.size + this.health) {
-                            this.avoidOrAttract("avoid", boids[i], this.personalSpace);
+                            this.avoidOrAttract("avoid", boids[i]);
                         }
                     } else {
                         //if other species fight or flight
