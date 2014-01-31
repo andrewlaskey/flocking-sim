@@ -1,17 +1,17 @@
 var calculateDistance = function(object1, object2){
-        x = abs(object1.x - object2.x);
-        y = abs(object1.y - object2.y);
-        
-        return sqrt((x * x) + (y * y));
-    }
+    x = abs(object1.x - object2.x);
+    y = abs(object1.y - object2.y);
+
+    return sqrt((x * x) + (y * y));
+};
 
 var calcMagnitude = function(x, y) {
     return sqrt((x * x) + (y * y));
-}
+};
 
 var calcVectorAdd = function(v1, v2) {
     return {x: v1.x + v2.x, y: v1.y + v2.y};
-}
+};
 
 /***********************
 BOID
