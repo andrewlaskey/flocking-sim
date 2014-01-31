@@ -50,51 +50,28 @@ Boid.prototype = {
 
         this.v = {
             x: random(-1, 1),
-            y: random(-1, 1)
+            y: random(-1, 1),
+            mag: 0
+        };
+
+        this.unitV = {
+            x: 0,
+            y: 0
         };
 
     },
     wallAvoid: function(ctx) {
-        wallModifier = 6;
-        //each side of the screen becomes an object that to be avoided factored into the birds movement
-        wallLeft = {
-            x: 0,
-            y: this.y
-        };
-        wallTop = {
-            x: this.x,
-            y: 0
-        };
-        wallRight = {
-            x: ctx.width,
-            y: this.y
-        };
-        wallBottom = {
-            x: this.x,
-            y: ctx.height
-        };
-        wallAvoid = {
-            x: 0,
-            y: 0
-        };
-
-        if (calculateDistance(wallLeft, this) < this.eyesight) {
-                        wallAvoid.x -= (wallLeft.x - this.x) * wallModifier;
-                        wallAvoid.y -= (wallLeft.y - this.y) * wallModifier;
+        var wallPad = 10;
+        if (this.x < wallPad) {
+            this.v.x = this.speed;
+        } else if (this.x > ctx.width - wallPad) {
+            this.v.x = -this.speed;
         }
-        if (calculateDistance(wallTop, this) < this.eyesight) {
-                        wallAvoid.x -= (wallTop.x - this.x) * wallModifier;
-                        wallAvoid.y -= (wallTop.y - this.y) * wallModifier;
+        if (this.y < wallPad) {
+            this.v.y = this.speed;
+        } else if (this.y > ctx.height - wallPad) {
+            this.v.y = -this.speed;
         }
-        if (calculateDistance(wallRight, this) < this.eyesight) {
-                        wallAvoid.x -= (wallRight.x - this.x) * wallModifier;
-                        wallAvoid.y -= (wallRight.y - this.y) * wallModifier;
-        }
-        if (calculateDistance(wallBottom, this) < this.eyesight) {
-                        wallAvoid.x -= (wallBottom.x - this.x) * wallModifier;
-                        wallAvoid.y -= (wallBottom.y - this.y) * wallModifier;
-        }
-        this.v = calcVectorAdd(this.v, wallAvoid);
     },
     ai: function(boids, index, ctx) {
         percievedCenter = {
@@ -167,12 +144,22 @@ Boid.prototype = {
         }
 
         this.wallAvoid(ctx);
-        this.setUnitVector();
+        this.limitVelocity();
     },
     setUnitVector: function() {
         var magnitude = calcMagnitude(this.v.x, this.v.y);
         this.v.x = this.v.x / magnitude;
         this.v.y = this.v.y / magnitude;
+    },
+    limitVelocity: function() {
+        this.v.mag = calcMagnitude(this.v.x, this.v.y);
+        this.unitV.x = (this.v.x / this.v.mag);
+        this.unitV.y = (this.v.y / this.v.mag);
+
+        if (this.v.mag > this.speed) {
+            this.v.x = this.unitV.x * this.speed;
+            this.v.y = this.unitV.y * this.speed;
+        }
     },
     avoidOrAttract: function(action, other, modifier) {
         var newVector = {x: 0, y: 0};
@@ -183,9 +170,9 @@ Boid.prototype = {
         this.v = calcVectorAdd(this.v, newVector);
     },
     move: function() {
-        this.x += this.v.x * this.speed;
-        this.y += this.v.y * this.speed;
-        this.hunger += calcMagnitude(this.v.x * this.speed, this.v.y * this.speed);
+        this.x += this.v.x;
+        this.y += this.v.y;
+        this.hunger += this.v.mag;
     },
     eat: function(other) {
         if (other.type === "plant") {
@@ -193,6 +180,7 @@ Boid.prototype = {
             this.health++;
             this.hunger = 0;
         }
+        this.metabolism();
     },
     handleOther: function(other) {
         if (other.type === "predator") {
@@ -228,11 +216,11 @@ Boid.prototype = {
         drawSize = this.size + this.health;
 
         ctx.beginPath();
-        ctx.moveTo( this.x + ( this.v.x * drawSize ), this.y + ( this.v.y * drawSize ));
-        ctx.lineTo( this.x + ( this.v.y * drawSize ), this.y - ( this.v.x * drawSize ));
-        ctx.lineTo( this.x - ( this.v.x * drawSize * 2 ), this.y - ( this.v.y * drawSize * 2 ));
-        ctx.lineTo( this.x - ( this.v.y * drawSize ), this.y + ( this.v.x * drawSize ));
-        ctx.lineTo( this.x + ( this.v.x * drawSize ), this.y + ( this.v.y * drawSize ));
+        ctx.moveTo( this.x + ( this.unitV.x * drawSize ), this.y + ( this.unitV.y * drawSize ));
+        ctx.lineTo( this.x + ( this.unitV.y * drawSize ), this.y - ( this.unitV.x * drawSize ));
+        ctx.lineTo( this.x - ( this.unitV.x * drawSize * 2 ), this.y - ( this.unitV.y * drawSize * 2 ));
+        ctx.lineTo( this.x - ( this.unitV.y * drawSize ), this.y + ( this.unitV.x * drawSize ));
+        ctx.lineTo( this.x + ( this.unitV.x * drawSize ), this.y + ( this.unitV.y * drawSize ));
         ctx.fillStyle = this.color;
         ctx.shadowBlur = 20;
         ctx.shadowColor = this.color;
@@ -266,6 +254,7 @@ Predator.prototype.eat = function(other) {
         this.health++;
         this.hunger = 0;
     }
+    this.metabolism();
 };
 
 Predator.prototype.handleOther = function(other) {
@@ -324,7 +313,6 @@ sim.update = function() {
 
                 boids[i].ai(boids, i, sim);
                 boids[i].move();
-                boids[i].metabolism();
                 boids[i].mitosis();
 
             } else {
