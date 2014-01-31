@@ -65,8 +65,8 @@ Boid.prototype = {
         this.eyesight = 100; //range for object dectection
         this.personalSpace = 20; //distance to avoid safe objects
         this.flightDistance = 60; //distance to avoid scary objects
-        this.flockDistance = 200; //factor that determines how attracted the boid is to the center of the flock
-        this.matchVelFactor = 10; //factor that determines how much the flock velocity affects the boid. less = more matching
+        this.flockDistance = 100; //factor that determines how attracted the boid is to the center of the flock
+        this.matchVelFactor = 6; //factor that determines how much the flock velocity affects the boid. less = more matching
 
         this.x = x || 0.0;
         this.y = y || 0.0;
@@ -399,7 +399,7 @@ sim.setup = function() {
     };
 
 sim.spawn = function( x, y) {
-        var predatorProbability = 0.3,
+        var predatorProbability = 0.1,
             plantProbability = 0.3;
             
 
